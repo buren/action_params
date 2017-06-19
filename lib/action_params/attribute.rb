@@ -1,8 +1,14 @@
 # frozen_string_literal: true
 
+require 'active_model'
+
 module ActionParams
   class Attribute
-    attr_reader :name,
+    # Required dependency for ActiveModel::Errors
+     extend ActiveModel::Naming
+
+    attr_reader :errors,
+                :name,
                 :type,
                 :exists_on,
                 :required_on,
@@ -29,7 +35,7 @@ module ActionParams
       @one_of = one_of
       @of = of
       @children = children
-      @valid = nil
+      @errors = ActiveModel::Errors.new(self)
     end
 
     def required_on?(action)
@@ -45,16 +51,21 @@ module ActionParams
     end
 
     def valid?
-      return @valid unless @valid.nil?
-
       validate
     end
 
     def validate
-      return @valid = false unless children_valid?
-      return @valid = false unless one_of_valid?
+      errors.clear
 
-      @valid = true
+      unless children_valid?
+        errors.add(:children, :invalid, message: "#{type} cannot children")
+      end
+
+      unless one_of_valid?
+        errors.add(:one_of, :invalid, message: "#{type} cannot validate one of #{one_of}")
+      end
+
+      errors.empty?
     end
 
     def children_valid?
@@ -72,6 +83,21 @@ module ActionParams
       return true if type < Numeric == true # Check if type has Numeric ancestor
 
       false
+    end
+
+    # For using ActiveModel::Errors
+    # the following methods are needed to be minimally implemented
+
+    def read_attribute_for_validation(attribute)
+      send(attribute)
+    end
+
+    def self.human_attribute_name(attribute, options = {})
+      attribute
+    end
+
+    def self.lookup_ancestors
+      [self]
     end
   end
 end
